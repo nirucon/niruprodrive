@@ -425,7 +425,17 @@ impl App {
 
     fn event(&mut self, ev: Event) {
         match ev {
-            Event::Expose(e) if e.window == self.x.tray => self.tray_dirty = true,
+            // The bar shows the icon (or uncovers it): paint it again, even
+            // when its state did not change. A first paint before the tray
+            // mapped it is lost, and the window's black ground showed.
+            Event::Expose(e) if e.window == self.x.tray => {
+                self.tray_sign = None;
+                self.tray_dirty = true;
+            }
+            Event::MapNotify(e) if e.window == self.x.tray => {
+                self.tray_sign = None;
+                self.tray_dirty = true;
+            }
             Event::Expose(e) if e.window == self.x.menu => self.draw_menu(),
             Event::Expose(e) if e.count == 0 => self.dirty = true,
             Event::ConfigureNotify(e) if e.window == self.x.win => {
@@ -434,7 +444,10 @@ impl App {
                     self.dirty = true;
                 }
             }
-            Event::ConfigureNotify(e) if e.window == self.x.tray => self.tray_dirty = true,
+            Event::ConfigureNotify(e) if e.window == self.x.tray => {
+                self.tray_sign = None;
+                self.tray_dirty = true;
+            }
             Event::ReparentNotify(e) if e.window == self.x.tray => {
                 // Back on the root window: the tray went away.
                 if e.parent == self.x.root {

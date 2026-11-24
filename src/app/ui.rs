@@ -138,6 +138,9 @@ impl App {
             Signed::Unknown => "checking…".into(),
             Signed::Out => "signed out".into(),
             Signed::Failed(_) => "cannot reach Proton Drive".into(),
+            Signed::In if self.cfg.folders.is_empty() => {
+                format!("{} · no folders chosen for backup yet", self.cfg.host)
+            }
             Signed::In => {
                 let mut s = self.cfg.host.clone();
                 if let Some(u) = self.usage.filter(|u| *u > 0) {
@@ -1053,6 +1056,10 @@ impl App {
         }
         if self.paused {
             return Sign::Paused;
+        }
+        // Signed in, but nothing chosen to back up yet: not a tick.
+        if self.cfg.folders.is_empty() {
+            return Sign::Off;
         }
         let err = self
             .shared

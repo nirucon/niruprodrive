@@ -1,3 +1,10 @@
+# niruprodrive 0.1.3
+
+- The cloud in the bar is painted whenever the bar shows it: a first paint
+  before the tray had mapped it was lost and the icon stayed black.
+- Signed in but no folder chosen yet: the cloud shows a dash, not a tick,
+  and its name says that no folders are chosen.
+
 # niruprodrive 0.1.2
 
 - The window opens on the workspace you are on: a click on the cloud (or
