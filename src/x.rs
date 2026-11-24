@@ -308,13 +308,70 @@ impl X {
             .unwrap_or((18, 18))
     }
 
+    fn cardinal(&self, w: Window, name: &str) -> Option<u32> {
+        let a = atom(&self.c, name).ok()?;
+        self.c
+            .get_property(false, w, a, AtomEnum::CARDINAL, 0, 1)
+            .ok()?
+            .reply()
+            .ok()?
+            .value32()?
+            .next()
+    }
+
+    /// The window is on screen on the workspace being looked at (not hidden,
+    /// not minimised, not on another workspace).
+    pub fn visible_here(&self) -> bool {
+        let viewable = self
+            .c
+            .get_window_attributes(self.win)
+            .ok()
+            .and_then(|c| c.reply().ok())
+            .is_some_and(|a| a.map_state == MapState::VIEWABLE);
+        if !self.mapped || !viewable {
+            return false;
+        }
+        match (
+            self.cardinal(self.win, "_NET_WM_DESKTOP"),
+            self.cardinal(self.root, "_NET_CURRENT_DESKTOP"),
+        ) {
+            (Some(0xFFFF_FFFF), _) => true,
+            (Some(mine), Some(current)) => mine == current,
+            _ => true,
+        }
+    }
+
+    /// Show the window on the workspace being looked at: a window that was
+    /// hidden, minimised or left on another workspace comes here, focused.
     pub fn show(&mut self) {
+        if let (Some(current), Ok(desk)) = (
+            self.cardinal(self.root, "_NET_CURRENT_DESKTOP"),
+            atom(&self.c, "_NET_WM_DESKTOP"),
+        ) {
+            // Read by the window manager when it maps the window …
+            let _ = self.c.change_property32(
+                PropMode::REPLACE,
+                self.win,
+                desk,
+                AtomEnum::CARDINAL,
+                &[current],
+            );
+            // … and the request that moves one it already manages.
+            let ev = ClientMessageEvent::new(32, self.win, desk, [current, 2, 0, 0, 0]);
+            let _ = self.c.send_event(
+                false,
+                self.root,
+                EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
+                ev,
+            );
+        }
         let _ = self.c.map_window(self.win);
         let _ = self.c.configure_window(
             self.win,
             &ConfigureWindowAux::new().stack_mode(StackMode::ABOVE),
         );
-        // Ask the window manager to focus it (EWMH).
+        // Ask the window manager to focus it (EWMH); this also restores a
+        // minimised window.
         if let Ok(a) = atom(&self.c, "_NET_ACTIVE_WINDOW") {
             let ev = ClientMessageEvent::new(32, self.win, a, [2, x11rb::CURRENT_TIME, 0, 0, 0]);
             let _ = self.c.send_event(

@@ -1200,7 +1200,7 @@ impl App {
 
     pub(super) fn tray_menu(&mut self, rx: i32, ry: i32) {
         let mut items: Vec<(String, Act)> = vec![(
-            if self.x.mapped {
+            if self.x.visible_here() {
                 "Hide the window"
             } else {
                 "Open niruprodrive"

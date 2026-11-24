@@ -542,7 +542,7 @@ impl App {
     }
 
     fn toggle_window(&mut self) {
-        if self.x.mapped {
+        if self.x.visible_here() {
             self.x.hide();
         } else {
             self.show_window();
@@ -1286,7 +1286,8 @@ impl App {
                     self.flash("Link copied", false);
                 }
             }
-            Act::Show => self.show_window(),
+            // The tray menu's first row: hide when it is in view, else bring it here.
+            Act::Show => self.toggle_window(),
             Act::Quit => {
                 if self.transfers.iter().any(|t| t.state == TState::Running) {
                     self.confirm = Some(Confirm {

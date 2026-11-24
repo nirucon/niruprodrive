@@ -1,3 +1,9 @@
+# niruprodrive 0.1.2
+
+- The window opens on the workspace you are on: a click on the cloud (or
+  `niruprodrive`) brings a hidden, minimised or elsewhere-open window to
+  this workspace, focused. The cloud hides it only when it is in view here.
+
 # niruprodrive 0.1.1
 
 - Sign-in works when the service was started by the installer: the service
