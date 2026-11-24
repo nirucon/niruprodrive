@@ -184,6 +184,18 @@ fi
 
 [ ! -e "$FAKE_DRIVE/FORBIDDEN" ] || fail "forbidden commands: $(cat "$FAKE_DRIVE/FORBIDDEN")"
 grep -Eq "^(filesystem (trash|delete|move|rename|restore|empty-trash)|sharing remove )" "$FAKE_DRIVE/calls.log" && fail "removal asked for"
+# The supervisor starts the service again after a kill, and after a stop
+# signal sent to the service alone, and writes down who sent it.
+SVC=$(pgrep -P "$APP" -x niruprodrive | head -1)
+[ -n "$SVC" ] || fail "no supervised service under $APP"
+kill -KILL "$SVC"
+wait_for 10 sh -c "p=\$(pgrep -P $APP -x niruprodrive); [ -n \"\$p\" ] && [ \"\$p\" != $SVC ] && \"$BIN\" status >/dev/null 2>&1" || fail "not started again after a kill"
+grep -q "was killed by signal KILL; starting it again" "$SB/out.log" || fail "the kill was not logged: $(cat "$SB/out.log")"
+SVC=$(pgrep -P "$APP" -x niruprodrive | head -1)
+kill -TERM "$SVC"
+wait_for 10 sh -c "p=\$(pgrep -P $APP -x niruprodrive); [ -n \"\$p\" ] && [ \"\$p\" != $SVC ] && \"$BIN\" status >/dev/null 2>&1" || fail "not started again after TERM"
+grep -q "stopped by signal TERM from process" "$SB/out.log" || fail "the sender was not logged: $(cat "$SB/out.log")"
+echo "supervisor ok"
 "$BIN" quit
 wait_for 5 sh -c "! kill -0 $APP 2>/dev/null" || fail "did not quit"
 [ ! -S "$XDG_RUNTIME_DIR/niruprodrive.sock" ] || fail "socket left behind"

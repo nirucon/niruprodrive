@@ -77,6 +77,10 @@ niruprodrive status           what it is doing, as JSON
 niruprodrive quit
 ```
 
+The service runs under a small supervisor that starts it again if it is
+killed or crashes; Quit and a logout end it. What stopped it, and who sent
+the signal, is written to `~/.local/state/niruprodrive/service.log`.
+
 Keys in the window: `1` `2` `3` (or `Tab`) for Drive, Transfers and Backup;
 `Enter` opens, `Backspace` goes up, `F5` refreshes; on the Backup tab `B`
 backs up now, `P` pauses, `S` changes the schedule, `O` the battery rule and

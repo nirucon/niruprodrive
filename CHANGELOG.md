@@ -1,3 +1,18 @@
+# niruprodrive 0.1.4
+
+- The service stays up. A small supervisor starts it again when it is
+  killed or stopped by a signal sent to it alone (on niruxwork it was
+  stopped half a minute after a resume, and the cloud was gone until the
+  next login). Quit, `niruprodrive quit`, a logout and a stop of both
+  processes still end it; one that keeps failing is given up on.
+- What stopped it is written to `~/.local/state/niruprodrive/service.log`:
+  the signal and the process that sent it.
+- A closed X display (a logout) ends the service, so the next login starts
+  a new one with its icon instead of finding an old one without a bar.
+- A reader that goes away no longer ends the service (SIGPIPE).
+- The installer starts the service under the user's systemd manager when
+  there is one, not inside the SSH login of a rollout.
+
 # niruprodrive 0.1.3
 
 - The cloud in the bar is painted whenever the bar shows it: a first paint

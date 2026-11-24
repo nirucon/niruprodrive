@@ -145,7 +145,24 @@ if [[ $START == 1 ]]; then
       "$BIN/niruprodrive" status >/dev/null 2>&1 || break
       sleep 0.3
     done
-    setsid "$BIN/niruprodrive" service </dev/null >>"$STATE/service.log" 2>&1 &
+    # Under the user's systemd manager when there is one: a service started
+    # from an SSH login (a rollout) then does not live in that login, which
+    # systemd may end later. Otherwise on its own, outside this shell.
+    started=0
+    if command -v systemd-run >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; then
+      run=(--user --quiet --collect --unit="niruprodrive-$(date +%s)"
+        --setenv=DISPLAY="$DISPLAY" --setenv=HOME="$HOME"
+        --setenv=PATH="$BIN:/usr/local/bin:/usr/bin:/bin"
+        --property=StandardOutput=append:"$STATE/service.log"
+        --property=StandardError=append:"$STATE/service.log")
+      for v in XAUTHORITY XDG_RUNTIME_DIR DBUS_SESSION_BUS_ADDRESS; do
+        [ -n "${!v:-}" ] && run+=(--setenv="$v=${!v}")
+      done
+      systemd-run "${run[@]}" "$BIN/niruprodrive" service >/dev/null 2>&1 && started=1
+    fi
+    if [ "$started" = 0 ]; then
+      setsid "$BIN/niruprodrive" service </dev/null >>"$STATE/service.log" 2>&1 &
+    fi
     sleep 0.8
     if "$BIN/niruprodrive" status >/dev/null 2>&1; then
       echo "The service runs: the cloud in the bar opens niruprodrive."

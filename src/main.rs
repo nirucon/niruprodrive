@@ -6,6 +6,7 @@ mod backup;
 mod canvas;
 mod cli;
 mod config;
+mod guard;
 mod icons;
 mod logo;
 mod text;
@@ -66,6 +67,24 @@ fn serve(show: bool) -> Result<(), String> {
     // A long-running service should not hold on to the folder it was
     // started in (an installer's temporary folder, a USB stick).
     let _ = std::env::set_current_dir(theme::home());
+    if std::env::var_os(guard::CHILD_ENV).is_none() {
+        // Already running: show its window. Otherwise run the service under
+        // its supervisor, which starts it again when it is stopped.
+        if app::ask(&json!({"op": "ping"})).is_ok() {
+            if show {
+                app::ask(&json!({"op": "show"}))?;
+            }
+            return Ok(());
+        }
+        let code = guard::supervise(show);
+        return if code == 0 {
+            Ok(())
+        } else {
+            std::process::exit(code)
+        };
+    }
+    std::env::remove_var(guard::CHILD_ENV);
+    guard::catch(true);
     match bind()? {
         None => {
             if show {
@@ -75,8 +94,12 @@ fn serve(show: bool) -> Result<(), String> {
         }
         Some(l) => {
             let mut a = app::App::new(l, show)?;
-            a.run();
-            Ok(())
+            let code = a.run();
+            if code == 0 {
+                Ok(())
+            } else {
+                std::process::exit(code)
+            }
         }
     }
 }

@@ -341,7 +341,11 @@ impl App {
 
     // ------------------------------------------------------------ the loop
 
-    pub fn run(&mut self) {
+    /// Runs until Quit (0), the X display closing (0) or a stop signal
+    /// (`guard::STOPPED_BY_SIGNAL`).
+    pub fn run(&mut self) -> i32 {
+        crate::guard::WAKE.store(self.wake, std::sync::atomic::Ordering::SeqCst);
+        let mut code = 0;
         let xfd = self.x.fd();
         let lfd = {
             use std::os::fd::AsRawFd;
@@ -387,6 +391,10 @@ impl App {
                         + 10,
                 );
             }
+            // A signal that came before the wake-up was set up.
+            if crate::guard::received().is_some() {
+                timeout = 0;
+            }
             let mut fds = [
                 libc::pollfd {
                     fd: xfd,
@@ -405,6 +413,18 @@ impl App {
                 },
             ];
             unsafe { libc::poll(fds.as_mut_ptr(), 3, timeout.clamp(0, 600_000) as i32) };
+            if let Some((sig, pid)) = crate::guard::received() {
+                crate::guard::log(&format!(
+                    "stopped by signal {}",
+                    crate::guard::describe(sig, pid)
+                ));
+                code = crate::guard::STOPPED_BY_SIGNAL;
+                break;
+            }
+            if fds[0].revents & (libc::POLLHUP | libc::POLLERR | libc::POLLNVAL) != 0 {
+                crate::guard::log("the X display closed (a logout); stopping");
+                break;
+            }
             if fds[1].revents & libc::POLLIN != 0 {
                 let mut v = 0u64;
                 unsafe { libc::read(self.wake, &mut v as *mut u64 as *mut libc::c_void, 8) };
@@ -421,6 +441,7 @@ impl App {
             let _ = st.save();
         }
         let _ = std::fs::remove_file(socket_path());
+        code
     }
 
     fn event(&mut self, ev: Event) {
