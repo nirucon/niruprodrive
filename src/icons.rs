@@ -1,7 +1,7 @@
 //! Pictures: the pixel cloud of the tray and window icon, with a sign for
 //! the state, and the suite's retro file icons (NIRUICONS) for the Drive.
 use crate::canvas::{Canvas, Image, Rect};
-use crate::theme::Palette;
+use crate::theme::{blend, Palette};
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -14,7 +14,7 @@ pub enum Sign {
     Busy,
     Paused,
     Error,
-    /// Signed out or no CLI: an outline only.
+    /// Signed out or no CLI: a dash.
     Off,
 }
 
@@ -54,12 +54,12 @@ fn sign_rows(s: Sign) -> [&'static str; 6] {
             "...#...", "...#...", "...#...", "...#...", ".......", "...#...",
         ],
         Sign::Off => [
-            ".......", ".......", ".......", ".......", ".......", ".......",
+            ".......", ".......", "#######", "#######", ".......", ".......",
         ],
     }
 }
 
-/// The cloud as 16x16 cells: 0 empty, 1 body, 2 outline, 3 sign.
+/// The cloud as 16x16 cells: 0 empty, 1 body, 3 sign.
 pub fn cells(sign: Sign) -> [[u8; 16]; 16] {
     let mut g = [[0u8; 16]; 16];
     for (y, row) in CLOUD.iter().enumerate() {
@@ -68,26 +68,6 @@ pub fn cells(sign: Sign) -> [[u8; 16]; 16] {
                 g[y][x] = 1;
             }
         }
-    }
-    if sign == Sign::Off {
-        // Only the edge of the body.
-        let body = g;
-        for y in 0..16 {
-            for x in 0..16 {
-                if body[y][x] == 1 {
-                    let inner = y > 0
-                        && y < 15
-                        && x > 0
-                        && x < 15
-                        && body[y - 1][x] == 1
-                        && body[y + 1][x] == 1
-                        && body[y][x - 1] == 1
-                        && body[y][x + 1] == 1;
-                    g[y][x] = if inner { 0 } else { 2 };
-                }
-            }
-        }
-        return g;
     }
     for (y, row) in sign_rows(sign).iter().enumerate() {
         for (x, c) in row.bytes().enumerate() {
@@ -105,15 +85,16 @@ pub fn draw_cloud(cv: &mut Canvas, r: Rect, sign: Sign, p: &Palette, ground: u32
     let (ox, oy) = (r.x + (r.w - 16 * u) / 2, r.y + (r.h - 16 * u) / 2);
     let body = match sign {
         Sign::Error => p.error,
-        Sign::Paused => p.muted,
-        Sign::Off => p.muted,
+        // Signed out and paused: the text colour, a little dimmed, so the
+        // cloud reads clearly in the bar without looking busy or done.
+        Sign::Paused | Sign::Off => blend(p.foreground, p.muted, 0.5),
         _ => p.mark(),
     };
     let g = cells(sign);
     for (y, row) in g.iter().enumerate() {
         for (x, c) in row.iter().enumerate() {
             let col = match c {
-                1 | 2 => body,
+                1 => body,
                 3 => ground,
                 _ => continue,
             };
@@ -217,7 +198,7 @@ mod tests {
 
     #[test]
     fn every_sign_sits_inside_the_cloud() {
-        for s in [Sign::Done, Sign::Busy, Sign::Paused, Sign::Error] {
+        for s in [Sign::Done, Sign::Busy, Sign::Paused, Sign::Error, Sign::Off] {
             let g = cells(s);
             let body = cells(Sign::Done);
             for y in 0..16 {
@@ -228,8 +209,9 @@ mod tests {
                 }
             }
         }
-        // The signed-out cloud is an outline: no body inside.
-        assert_eq!(cells(Sign::Off)[10][8], 0);
+        // Signed out: a dash across the middle of a full cloud.
+        assert_eq!(cells(Sign::Off)[8][8], 3);
+        assert_eq!(cells(Sign::Off)[11][8], 1);
         assert_eq!(kind_of("A.JPG"), "image-x-generic");
         assert_eq!(kind_of("noext"), "unknown");
     }

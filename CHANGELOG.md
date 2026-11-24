@@ -1,3 +1,12 @@
+# niruprodrive 0.1.1
+
+- Sign-in works when the service was started by the installer: the service
+  and the Proton Drive CLI now run in the home folder, not in the
+  installer's temporary folder (which is deleted, and the CLI refused to
+  run there: "no contact").
+- The cloud in the bar is easier to see before sign-in: a full cloud in a
+  light grey with a dash, instead of a faint outline.
+
 # niruprodrive 0.1.0
 
 The first version.

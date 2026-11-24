@@ -56,8 +56,12 @@ wait_for() { # SECONDS COMMAND...
   return 1
 }
 
-"$BIN" >"$SB/out.log" 2>&1 &
+# Started from a folder that is deleted afterwards, as the installer does.
+mkdir "$SB/gone"
+(cd "$SB/gone" && exec "$BIN" >"$SB/out.log" 2>&1) &
 APP=$!
+sleep 0.3
+rmdir "$SB/gone"
 PIDS="$PIDS $APP"
 wait_for 5 test -S "$XDG_RUNTIME_DIR/niruprodrive.sock" || fail "no socket"
 wait_for 5 sh -c "\"$BIN\" status | grep -q '\"signed\": \"Out\"'" || fail "not signed out at start: $(state)"

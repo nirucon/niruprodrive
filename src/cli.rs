@@ -280,7 +280,11 @@ impl Runner {
 
     fn command(&self, cmd: &Cmd) -> Command {
         let mut c = Command::new(&self.bin);
+        // A folder that is sure to exist: the CLI refuses to run in a
+        // deleted one (the service may have been started from an
+        // installer's temporary folder).
         c.args(cmd.args())
+            .current_dir(crate::theme::home())
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());

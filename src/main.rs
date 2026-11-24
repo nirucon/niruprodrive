@@ -63,6 +63,9 @@ fn bind() -> Result<Option<std::os::unix::net::UnixListener>, String> {
 }
 
 fn serve(show: bool) -> Result<(), String> {
+    // A long-running service should not hold on to the folder it was
+    // started in (an installer's temporary folder, a USB stick).
+    let _ = std::env::set_current_dir(theme::home());
     match bind()? {
         None => {
             if show {
