@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=niruprodrive service
+Comment=The tray icon and the scheduled backups to Proton Drive
+Exec=niruprodrive service
+Icon=niruprodrive
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

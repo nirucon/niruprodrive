@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=niruprodrive
+GenericName=Proton Drive backup
+Comment=Back up folders to Proton Drive; send, fetch and share files
+Exec=niruprodrive
+Icon=niruprodrive
+Terminal=false
+Categories=Network;FileTransfer;Utility;
+Keywords=proton;drive;backup;cloud;share;upload;
+StartupWMClass=niruprodrive

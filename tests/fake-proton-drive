@@ -1,0 +1,309 @@
+#!/usr/bin/env python3
+"""A stand-in for Proton's Proton Drive CLI, for the tests: the same command
+lines and JSON shapes, with "the Drive" a folder on disk ($FAKE_DRIVE).
+
+Every call is logged to $FAKE_DRIVE/calls.log. A command that would trash,
+delete, move, rename or replace anything is written to $FAKE_DRIVE/FORBIDDEN
+and fails: the tests check that file never appears.
+"""
+import json
+import os
+import shutil
+import sys
+import time
+
+ROOT = os.environ["FAKE_DRIVE"]
+DRIVE = os.path.join(ROOT, "drive")
+SESSION = os.path.join(ROOT, "session")
+LINKS = os.path.join(ROOT, "links.json")
+REVS = os.path.join(ROOT, "revisions")
+
+
+def log(*a):
+    with open(os.path.join(ROOT, "calls.log"), "a") as f:
+        f.write(" ".join(a) + "\n")
+
+
+def forbidden(why):
+    with open(os.path.join(ROOT, "FORBIDDEN"), "a") as f:
+        f.write(why + "\n")
+    sys.stderr.write("Error: forbidden in tests: %s\n" % why)
+    sys.exit(3)
+
+
+def fail(msg, code=1):
+    sys.stderr.write("Error: %s\n" % msg)
+    sys.exit(code)
+
+
+def split(path):
+    parts, cur, esc = [], "", False
+    for c in path:
+        if esc:
+            cur += c
+            esc = False
+        elif c == "\\":
+            esc = True
+        elif c == "/":
+            if cur:
+                parts.append(cur)
+            cur = ""
+        else:
+            cur += c
+    if cur:
+        parts.append(cur)
+    return parts
+
+
+def local(path):
+    parts = split(path)
+    if not parts or parts[0] != "my-files":
+        fail("only /my-files exists in the fake drive")
+    for p in parts:
+        if p in (".", "..") or "/" in p:
+            forbidden("path escape: " + path)
+    return os.path.join(DRIVE, *parts)
+
+
+def links():
+    try:
+        with open(LINKS) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def iso(t):
+    return time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime(t))
+
+
+def node(p, rel):
+    st = os.stat(p)
+    folder = os.path.isdir(p)
+    n = {
+        "uid": "uid-" + rel,
+        "name": {"ok": True, "value": os.path.basename(p)},
+        "type": "folder" if folder else "file",
+        "modificationTime": iso(st.st_mtime),
+        "isSharedByUrl": rel in links(),
+        "totalStorageSize": 0 if folder else st.st_size + 100,
+    }
+    if not folder:
+        n["activeRevision"] = {
+            "claimedSize": st.st_size,
+            "claimedModificationTime": iso(st.st_mtime),
+        }
+    return n
+
+
+def rel_of(p):
+    return "/" + os.path.relpath(p, DRIVE)
+
+
+def need_session():
+    if not os.path.exists(SESSION):
+        fail("You need to login first. Run: auth login")
+
+
+def same(a, b):
+    if os.path.getsize(a) != os.path.getsize(b):
+        return False
+    with open(a, "rb") as x, open(b, "rb") as y:
+        return x.read() == y.read()
+
+
+def free_name(dst):
+    base, ext = os.path.splitext(dst)
+    i = 1
+    while os.path.exists("%s (%d)%s" % (base, i, ext)):
+        i += 1
+    return "%s (%d)%s" % (base, i, ext)
+
+
+def upload(srcs, parent, fstrat, dstrat, summary):
+    for s in srcs:
+        dst = os.path.join(parent, os.path.basename(s.rstrip("/")))
+        if os.path.isdir(s) and not os.path.islink(s):
+            if os.path.exists(dst):
+                if dstrat != "merge":
+                    forbidden("folder strategy " + dstrat)
+            else:
+                os.mkdir(dst)
+            upload([os.path.join(s, n) for n in sorted(os.listdir(s))], dst, fstrat, dstrat, summary)
+        elif os.path.isfile(s):
+            if os.path.exists(dst):
+                if same(s, dst):
+                    summary["skippedItems"] += 1
+                    continue
+                if fstrat == "create-new-revision":
+                    os.makedirs(REVS, exist_ok=True)
+                    keep = os.path.join(REVS, rel_of(dst).replace("/", "_") + ".%d" % time.time_ns())
+                    shutil.copy2(dst, keep)
+                elif fstrat == "rename":
+                    dst = free_name(dst)
+                else:
+                    forbidden("file strategy " + fstrat)
+            if os.path.basename(s) == "FAIL-ME":
+                summary["failedItems"] += 1
+                summary["failures"].append({"name": "FAIL-ME", "nodeUid": None, "error": "fake failure"})
+                continue
+            shutil.copy2(s, dst)
+            summary["transferredItems"] += 1
+            summary["transferredBytes"] += os.path.getsize(s)
+
+
+def main():
+    args = sys.argv[1:]
+    log(*args)
+    if "--json" in args:
+        args.remove("--json")
+    js = True
+    if not args:
+        fail("no command")
+    if args[0] == "version":
+        print("Proton Drive CLI cli-drive@0.9.0+fake")
+        return
+    cmd = args[:2]
+    rest = args[2:]
+    if cmd == ["auth", "login"]:
+        print(json.dumps({"signInUrl": "https://account.proton.me/fake-sign-in"}), flush=True)
+        for _ in range(300):
+            if os.path.exists(os.path.join(ROOT, "approve")):
+                open(SESSION, "w").close()
+                os.makedirs(os.path.join(DRIVE, "my-files"), exist_ok=True)
+                print(json.dumps({"ok": True}))
+                return
+            time.sleep(0.1)
+        fail("sign-in timed out")
+    if cmd == ["auth", "logout"]:
+        if os.path.exists(SESSION):
+            os.remove(SESSION)
+        return
+    bad = {"trash", "delete", "move", "rename", "empty-trash", "restore", "copy", "remove", "leave", "invite"}
+    if cmd[1:2] and cmd[1] in bad:
+        forbidden(" ".join(args))
+    need_session()
+    if cmd == ["filesystem", "list"]:
+        path = rest[-1]
+        if path == "/":
+            print(json.dumps([{"uid": "root", "name": {"ok": True, "value": "my-files"}, "type": "folder"}]))
+            return
+        p = local(path)
+        if not os.path.isdir(p):
+            fail("Node not found: " + path)
+        print("[")
+        names = sorted(os.listdir(p))
+        for i, n in enumerate(names):
+            print(json.dumps(node(os.path.join(p, n), rel_of(os.path.join(p, n)))) + ("," if i < len(names) - 1 else ""))
+        print("]")
+        return
+    if cmd == ["filesystem", "info"]:
+        p = local(rest[-1])
+        if not os.path.exists(p):
+            fail("Node not found: " + rest[-1])
+        print(json.dumps(node(p, rel_of(p))))
+        return
+    if cmd == ["filesystem", "size"]:
+        p = local(rest[-1])
+        total, count = 0, 0
+        for d, _, fs in os.walk(p):
+            for f in fs:
+                total += os.path.getsize(os.path.join(d, f))
+                count += 1
+        print(json.dumps({"size": total, "numberOfDescendants": count}))
+        return
+    if cmd == ["filesystem", "create-folder"]:
+        parent, name = rest[0], rest[1]
+        pp = local(parent)
+        if not os.path.isdir(pp):
+            fail("Node not found: " + parent)
+        target = os.path.join(pp, name)
+        if os.path.exists(target):
+            fail("A file or folder with that name already exists")
+        os.mkdir(target)
+        print(json.dumps({"uid": "new"}))
+        return
+    if cmd == ["filesystem", "upload"]:
+        fstrat = dstrat = None
+        items = []
+        i = 0
+        while i < len(rest):
+            if rest[i] in ("-f", "--file-conflict-strategy"):
+                fstrat = rest[i + 1]
+                i += 2
+            elif rest[i] in ("-d", "--folder-conflict-strategy"):
+                dstrat = rest[i + 1]
+                i += 2
+            elif rest[i] in ("-t", "--skip-thumbnails"):
+                i += 1
+            else:
+                items.append(rest[i])
+                i += 1
+        if fstrat in ("replace",) or dstrat in ("replace",):
+            forbidden("replace strategy")
+        if fstrat is None or dstrat is None:
+            fail("would prompt: no strategy")
+        parent = local(items[-1])
+        if not os.path.isdir(parent):
+            fail("Node not found: " + items[-1])
+        summary = {"transferredItems": 0, "transferredBytes": 0, "skippedItems": 0, "failedItems": 0, "failures": []}
+        if os.environ.get("FAKE_SLOW"):
+            time.sleep(float(os.environ["FAKE_SLOW"]))
+        upload(items[:-1], parent, fstrat, dstrat, summary)
+        print(json.dumps(summary))
+        if summary["failedItems"]:
+            fail("%d item(s) failed to upload" % summary["failedItems"])
+        return
+    if cmd == ["filesystem", "download"]:
+        opts = {}
+        items = []
+        i = 0
+        while i < len(rest):
+            if rest[i] in ("-f", "-d"):
+                opts[rest[i]] = rest[i + 1]
+                i += 2
+            else:
+                items.append(rest[i])
+                i += 1
+        if opts.get("-f") != "rename" or opts.get("-d") != "merge":
+            forbidden("download strategy %r" % opts)
+        to = items[-1]
+        summary = {"transferredItems": 0, "transferredBytes": 0, "skippedItems": 0, "failedItems": 0, "failures": []}
+        for r in items[:-1]:
+            src = local(r)
+            dst = os.path.join(to, os.path.basename(src))
+            if os.path.exists(dst):
+                dst = free_name(dst)
+            if os.path.isdir(src):
+                shutil.copytree(src, dst)
+            else:
+                shutil.copy2(src, dst)
+            summary["transferredItems"] += 1
+        print(json.dumps(summary))
+        return
+    if cmd == ["sharing", "set-url"]:
+        path = rest[-1]
+        p = local(path)
+        if not os.path.exists(p):
+            fail("Node not found: " + path)
+        exp = None
+        if "--expiration" in rest:
+            exp = rest[rest.index("--expiration") + 1]
+        l = links()
+        l[rel_of(p)] = {"url": "https://drive.proton.me/urls/FAKE%d#k" % (len(l) + 1), "expires": exp}
+        with open(LINKS, "w") as f:
+            json.dump(l, f)
+        print(json.dumps({"members": [], "urlAccess": {"uid": "u", "role": "viewer", "url": l[rel_of(p)]["url"], "expirationTime": exp}}))
+        return
+    if cmd == ["sharing", "remove-url"]:
+        p = local(rest[-1])
+        l = links()
+        l.pop(rel_of(p), None)
+        with open(LINKS, "w") as f:
+            json.dump(l, f)
+        print(json.dumps({"ok": True}))
+        return
+    forbidden("unknown command " + " ".join(args))
+
+
+main()

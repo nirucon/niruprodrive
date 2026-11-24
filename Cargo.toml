@@ -1,0 +1,23 @@
+[package]
+name = "niruprodrive"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+description = "Proton Drive backup, upload, download and links for NIRUX: a tray icon and a small window"
+repository = "https://github.com/nirucon/niruprodrive"
+
+[dependencies]
+x11rb = "0.13"
+ab_glyph = "0.2"
+toml = "0.8"
+serde_json = "1"
+libc = "0.2"
+niruicons = { git = "https://github.com/nirucon/niruicons", tag = "v0.1.1" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
+opt-level = 3
