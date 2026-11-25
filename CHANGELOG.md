@@ -1,3 +1,9 @@
+# niruprodrive 0.1.5
+
+- Closing the window tells the window manager it is withdrawn (ICCCM), also
+  when the window manager had hidden it on another workspace. Before, the
+  window could come back empty (black) on that workspace, taking half of it.
+
 # niruprodrive 0.1.4
 
 - The service stays up. A small supervisor starts it again when it is

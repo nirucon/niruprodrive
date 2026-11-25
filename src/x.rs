@@ -385,8 +385,26 @@ impl X {
         self.flush();
     }
 
+    /// Withdraw the window (ICCCM 4.1.4): unmap it and tell the window
+    /// manager with a synthetic UnmapNotify on the root. The second part
+    /// matters when the window manager has already hidden the window on
+    /// another workspace: the unmap then makes no event, and without the
+    /// notice the window came back empty on the next visit there.
     pub fn hide(&mut self) {
         let _ = self.c.unmap_window(self.win);
+        let ev = UnmapNotifyEvent {
+            response_type: UNMAP_NOTIFY_EVENT,
+            sequence: 0,
+            event: self.root,
+            window: self.win,
+            from_configure: false,
+        };
+        let _ = self.c.send_event(
+            false,
+            self.root,
+            EventMask::SUBSTRUCTURE_REDIRECT | EventMask::SUBSTRUCTURE_NOTIFY,
+            ev,
+        );
         self.mapped = false;
         self.flush();
     }
