@@ -7,7 +7,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with: { components: "rustfmt, clippy" }
-      - run: sudo apt-get update && sudo apt-get install -y xvfb xdotool xclip fonts-dejavu-core
+      - run: sudo apt-get update && sudo apt-get install -y xvfb x11-utils xdotool xclip fonts-dejavu-core
       - run: cargo fmt --check
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: cargo test --locked
