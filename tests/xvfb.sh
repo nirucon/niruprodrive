@@ -182,6 +182,19 @@ if [ -n "${NIRUFM:-}" ]; then
   echo "NIRUFM ok"
 fi
 
+# Shown and closed many times in a row, as from the tray: every Escape is
+# handled at once. (Before 0.1.6 an event that arrived while the window was
+# painted could wait in the connection's queue for the next one, up to a
+# minute. That needs a window manager's traffic to show: about one round in
+# ten under NIRUWM. Here the loop guards the show and close cycle.)
+for i in $(seq 30); do
+  "$BIN" show >/dev/null 2>&1
+  wait_for 3 sh -c "xwininfo -id $W | grep -q IsViewable" || fail "round $i: show did not map the window"
+  xdotool windowfocus --sync "$W" key Escape
+  wait_for 3 sh -c "! xwininfo -id $W | grep -q IsViewable" || fail "round $i: Escape did not close the window at once"
+done
+echo "show and close ok"
+
 [ ! -e "$FAKE_DRIVE/FORBIDDEN" ] || fail "forbidden commands: $(cat "$FAKE_DRIVE/FORBIDDEN")"
 grep -Eq "^(filesystem (trash|delete|move|rename|restore|empty-trash)|sharing remove )" "$FAKE_DRIVE/calls.log" && fail "removal asked for"
 # The supervisor starts the service again after a kill, and after a stop

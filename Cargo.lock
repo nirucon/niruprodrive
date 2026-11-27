@@ -97,7 +97,7 @@ source = "git+https://github.com/nirucon/niruicons?tag=v0.1.1#e77a5d8ed045fb70bf
 
 [[package]]
 name = "niruprodrive"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "ab_glyph",
  "libc",

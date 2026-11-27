@@ -379,6 +379,15 @@ impl App {
                 break;
             }
             self.x.flush();
+            // Painting and the window checks above wait for replies, and the
+            // X connection queues the events that arrive in the meantime.
+            // Those are out of the socket already, so poll() below slept on
+            // them: a tray click or Escape then did nothing until the next
+            // event (or the minute's timeout) came.
+            if let Some(ev) = self.x.poll() {
+                self.event(ev);
+                continue;
+            }
             let mut timeout: i64 = 60_000;
             if let Some(due) = self.due() {
                 timeout = timeout.min(((due - now()).max(0) * 1000) + 50);

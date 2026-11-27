@@ -1,3 +1,10 @@
+# niruprodrive 0.1.6
+
+- A tray click or a key is never left waiting. Events that arrived while
+  the window was painted sat in the X connection's queue, and the service
+  slept until the next event or a minute had passed: about one tray click or
+  Escape in ten did nothing at first.
+
 # niruprodrive 0.1.5
 
 - Closing the window tells the window manager it is withdrawn (ICCCM), also
